@@ -6,7 +6,7 @@ sem precisar do Streamlit. Útil para rodar em servidor, cron job, etc.
 Exemplos de uso:
     python cli.py                                  # usa lista padrão
     python cli.py PETR4 VALE3 ITUB4                # tickers específicos
-    python cli.py PETR4 VALE3 --periodo 6mo         # período customizado
+    python cli.py PETR4 VALE3 --meses 6             # últimos 6 meses
     python cli.py PETR4 VALE3 --csv resultado.csv   # exporta para CSV
 """
 
@@ -18,7 +18,7 @@ from recommender import analyze_multiple
 def main():
     parser = argparse.ArgumentParser(description="Análise de ações da B3 com recomendações de investimento.")
     parser.add_argument("tickers", nargs="*", help="Códigos das ações (ex: PETR4 VALE3). Se vazio, usa lista padrão.")
-    parser.add_argument("--periodo", default="1y", help="Período histórico: 6mo, 1y, 2y, 5y (padrão: 1y)")
+    parser.add_argument("--meses", type=int, default=12, help="Quantidade de meses de histórico (padrão: 12)")
     parser.add_argument("--peso-tecnico", type=float, default=0.6, help="Peso do score técnico de 0 a 1 (padrão: 0.6)")
     parser.add_argument("--csv", default=None, help="Caminho para exportar o resultado em CSV")
     args = parser.parse_args()
@@ -26,7 +26,7 @@ def main():
     tickers = args.tickers if args.tickers else DEFAULT_TICKERS
 
     print(f"\nAnalisando {len(tickers)} ação(ões)... isso pode levar alguns segundos.\n")
-    resultado = analyze_multiple(tickers, period=args.periodo, peso_tecnico=args.peso_tecnico)
+    resultado = analyze_multiple(tickers, months=args.meses, peso_tecnico=args.peso_tecnico)
 
     with pd_option_context():
         print(resultado.to_string(index=False))
@@ -36,8 +36,7 @@ def main():
         print(f"\nResultado exportado para: {args.csv}")
 
     print(
-        "\n⚠️  Aviso: ferramenta educacional. Não constitui recomendação de investimento. "
-        "Consulte um profissional certificado antes de investir.\n"
+        "Boa Sorte Mana!!!"
     )
 
 

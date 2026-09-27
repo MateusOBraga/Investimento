@@ -25,16 +25,43 @@ from indicators import sma, rsi, macd, bollinger_bands
 
 st.set_page_config(page_title="Análise de Ações B3", page_icon="📈", layout="wide")
 
+
+# ---------------------------------------------------------------------------
+# Cache dos dados: evita bater no Yahoo Finance a cada clique, mas garante que
+# os dados fiquem "velhos" no máximo por CACHE_TTL_SEGUNDOS.
+# ---------------------------------------------------------------------------
+CACHE_TTL_SEGUNDOS = 5 * 60  # 5 minutos
+
+
+@st.cache_data(ttl=CACHE_TTL_SEGUNDOS, show_spinner=False)
+def analyze_ticker_cached(ticker: str, months: int, peso_tecnico: float):
+    return analyze_ticker(ticker, months=months, peso_tecnico=peso_tecnico)
+
+
+@st.cache_data(ttl=CACHE_TTL_SEGUNDOS, show_spinner=False)
+def analyze_multiple_cached(tickers: tuple, months: int, peso_tecnico: float):
+    return analyze_multiple(list(tickers), months=months, peso_tecnico=peso_tecnico)
+
+
 st.title("📈 Análise de Ações da B3 com Recomendações de Investimento")
 st.caption(
-    "Boa SORTE NOS INVESTIMENTOS MANA "
-    
+    "BOA SORTE MANA"
 )
 
 # ---------------------------------------------------------------------------
 # Barra lateral - configurações
 # ---------------------------------------------------------------------------
 st.sidebar.header("Configurações")
+
+if st.sidebar.button("🔄 Atualizar dados agora"):
+    st.cache_data.clear()
+    st.rerun()
+
+st.sidebar.caption(
+    f"Dados ficam em cache por até {CACHE_TTL_SEGUNDOS // 60} min antes de serem "
+    "buscados de novo no Yahoo Finance."
+)
+st.sidebar.divider()
 
 selecionar_todas = st.sidebar.checkbox(
     f"Selecionar todas as {len(DEFAULT_TICKERS)} ações da lista",
@@ -54,11 +81,22 @@ tickers_customizados = st.sidebar.text_input(
     placeholder="Ex: TOTS3, CYRE3, RAIL3",
 )
 
-periodo = st.sidebar.selectbox(
-    "Período histórico",
-    options=["6mo", "1y", "2y", "5y"],
-    index=1,
+unidade_periodo = st.sidebar.radio(
+    "Unidade do período histórico",
+    options=["Meses", "Anos"],
+    horizontal=True,
 )
+
+if unidade_periodo == "Meses":
+    quantidade_periodo = st.sidebar.slider(
+        "Quantidade de meses de histórico", min_value=1, max_value=24, value=12,
+    )
+    meses_historico = quantidade_periodo
+else:
+    quantidade_periodo = st.sidebar.slider(
+        "Quantidade de anos de histórico", min_value=1, max_value=10, value=1,
+    )
+    meses_historico = quantidade_periodo * 12
 
 peso_tecnico = st.sidebar.slider(
     "Peso da Análise Técnica no Score Final",
@@ -81,7 +119,7 @@ if not lista_final:
 st.subheader("🏆 Ranking Comparativo")
 
 with st.spinner("Analisando ações selecionadas..."):
-    tabela = analyze_multiple(lista_final, period=periodo, peso_tecnico=peso_tecnico)
+    tabela = analyze_multiple_cached(tuple(lista_final), meses_historico, peso_tecnico)
 
 
 def cor_recomendacao(val):
@@ -115,7 +153,7 @@ ticker_detalhe = st.selectbox("Escolha uma ação para ver os detalhes", options
 
 with st.spinner(f"Carregando detalhes de {ticker_detalhe}..."):
     try:
-        resultado = analyze_ticker(ticker_detalhe, period=periodo, peso_tecnico=peso_tecnico)
+        resultado = analyze_ticker_cached(ticker_detalhe, meses_historico, peso_tecnico)
     except Exception as e:
         st.error(f"Erro ao analisar {ticker_detalhe}: {e}")
         st.stop()
@@ -177,6 +215,8 @@ with col_b:
         st.markdown("- Dados fundamentalistas insuficientes para esta ação no momento.")
 
 st.divider()
+import datetime
+st.caption(f"🕒 Última busca de dados nesta sessão: {datetime.datetime.now().strftime('%d/%m/%Y %H:%M:%S')}")
 st.caption(
-    "QUANDO FICAR RICA ME AJUDA TBM"
+    "SE FICAR RICA ME AJUDA MANA"
 )

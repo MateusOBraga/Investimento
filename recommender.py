@@ -179,15 +179,16 @@ def _classificar(score: float) -> str:
         return "VENDER"
 
 
-def analyze_ticker(ticker: str, period: str = "1y", peso_tecnico: float = 0.6) -> dict:
+def analyze_ticker(ticker: str, months: int = 12, peso_tecnico: float = 0.6) -> dict:
     """
     Executa a análise completa de um ticker e retorna um dicionário com:
     score final, recomendação e detalhamento técnico/fundamentalista.
 
+    months: quantidade de meses de histórico de preços a considerar.
     peso_tecnico: peso do score técnico na nota final (0 a 1).
                   O restante (1 - peso_tecnico) vai para o score fundamentalista.
     """
-    df = get_price_history(ticker, period=period)
+    df = get_price_history(ticker, months=months)
     fund = get_fundamentals(ticker)
 
     tecnico = _score_technical(df)
@@ -218,12 +219,12 @@ def analyze_ticker(ticker: str, period: str = "1y", peso_tecnico: float = 0.6) -
     }
 
 
-def analyze_multiple(tickers: list, period: str = "1y", peso_tecnico: float = 0.6) -> pd.DataFrame:
+def analyze_multiple(tickers: list, months: int = 12, peso_tecnico: float = 0.6) -> pd.DataFrame:
     """Analisa uma lista de tickers e retorna um DataFrame resumo, ordenado pelo score final."""
     linhas = []
     for t in tickers:
         try:
-            r = analyze_ticker(t, period=period, peso_tecnico=peso_tecnico)
+            r = analyze_ticker(t, months=months, peso_tecnico=peso_tecnico)
             linhas.append({
                 "Ticker": r["ticker"],
                 "Nome": r["nome"],

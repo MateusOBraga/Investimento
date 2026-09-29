@@ -67,4 +67,17 @@ GLOSSARIO = {
         "todo. Beta acima de 1 = mais volátil que o mercado; abaixo de 1 = "
         "menos volátil."
     ),
+    "FII (Fundo de Investimento Imobiliário)": (
+        "Um fundo que reúne o dinheiro de vários investidores para comprar "
+        "imóveis (galpões, shoppings, escritórios) ou papéis ligados a "
+        "imóveis (CRIs). Você compra 'cotas' na bolsa, como se fossem ações, "
+        "e recebe mensalmente parte do aluguel ou dos juros que o fundo "
+        "receber — geralmente isento de Imposto de Renda para pessoa física."
+    ),
+    "ETF (Exchange Traded Fund)": (
+        "Um fundo negociado na bolsa que replica um índice inteiro (como o "
+        "Ibovespa ou o S&P 500), comprando um 'pacote' das ações que compõem "
+        "esse índice. Comprando uma cota, você fica exposto a dezenas de "
+        "empresas de uma vez só, o que ajuda bastante na diversificação."
+    ),
 }

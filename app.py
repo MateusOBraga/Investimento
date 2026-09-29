@@ -22,14 +22,24 @@ import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-from data_fetcher import DEFAULT_TICKERS, normalize_ticker
+from data_fetcher import DEFAULT_TICKERS, DEFAULT_FIIS, DEFAULT_ETFS, normalize_ticker
 from recommender import analyze_ticker, analyze_multiple
+from fii_recommender import analyze_multiple_fiis
+from etf_analyzer import analyze_multiple_etfs
 from indicators import sma, rsi, macd, bollinger_bands
 from glossary import GLOSSARIO
 from investor_profile import PERGUNTAS, calcular_perfil
 from simulador import simulate_dca
 
 st.set_page_config(page_title="Análise de Ações B3", page_icon="📈", layout="wide")
+
+# Se o usuário acabou de preencher o Perfil de Investidor, aplica os valores
+# sugeridos ANTES de os widgets correspondentes serem criados (o Streamlit não
+# permite alterar st.session_state de um widget depois que ele já foi
+# instanciado na mesma execução do script).
+if "_perfil_pendente" in st.session_state:
+    for _chave, _valor in st.session_state.pop("_perfil_pendente").items():
+        st.session_state[_chave] = _valor
 
 
 # ---------------------------------------------------------------------------
@@ -54,6 +64,16 @@ def simulate_dca_cached(ticker: str, aporte_mensal: float, meses: int):
     return simulate_dca(ticker, aporte_mensal, meses)
 
 
+@st.cache_data(ttl=CACHE_TTL_SEGUNDOS, show_spinner=False)
+def analyze_multiple_fiis_cached(tickers: tuple, months: int, peso_tecnico: float):
+    return analyze_multiple_fiis(list(tickers), months=months, peso_tecnico=peso_tecnico)
+
+
+@st.cache_data(ttl=CACHE_TTL_SEGUNDOS, show_spinner=False)
+def analyze_multiple_etfs_cached(tickers: tuple, months: int):
+    return analyze_multiple_etfs(list(tickers), months=months)
+
+
 def dy_para_pct(valor):
     """Converte dividend yield (fração ou %) para percentual, tratando None."""
     if valor is None or pd.isna(valor):
@@ -61,7 +81,7 @@ def dy_para_pct(valor):
     return valor * 100 if valor < 1 else valor
 
 
-st.title("📈 Análise de Ações da B3 com Recomendações de Investimento")
+st.title("Análise de Ações da B3 com Recomendações de Investimento")
 st.caption(
     "BOA SORTE MANA"
 )
@@ -129,8 +149,8 @@ st.caption(
 # ---------------------------------------------------------------------------
 # Abas
 # ---------------------------------------------------------------------------
-tab_ranking, tab_detalhe, tab_perfil, tab_simulador, tab_glossario, tab_sobre = st.tabs(
-    ["🏆 Ranking", "🔎 Análise Detalhada", "🎯 Perfil de Investidor",
+tab_ranking, tab_detalhe, tab_fiis, tab_etfs, tab_perfil, tab_simulador, tab_glossario, tab_sobre = st.tabs(
+    ["🏆 Ranking", "🔎 Análise Detalhada", "🏢 FIIs", "📊 ETFs", "🎯 Perfil de Investidor",
      "💰 Simulador de Aportes", "📖 Glossário", "ℹ️ Sobre"]
 )
 
@@ -148,10 +168,11 @@ with tab_ranking:
         setores_disponiveis = sorted([s for s in tabela["Setor"].dropna().unique()])
         setor_filtro = st.multiselect("Setor", setores_disponiveis, default=[])
     with col_f3:
-        score_min = st.slider("Score final mínimo", 0, 100, 0)
+        score_min = st.slider("Score final mínimo", 0, 100, 0, key="score_min_slider")
     with col_f4:
         dy_min_pct = st.number_input(
             "Dividend Yield mínimo (%)", min_value=0.0, value=0.0, step=0.5,
+            key="dy_min_input",
             help=GLOSSARIO.get("Dividend Yield"),
         )
 
@@ -255,13 +276,91 @@ with tab_detalhe:
             else:
                 st.markdown("- Dados fundamentalistas insuficientes para esta ação no momento.")
 
+# ===================== ABA: FIIs =====================
+with tab_fiis:
+    st.subheader("🏢 Fundos Imobiliários (FIIs)")
+    st.caption(
+        "Aqui os indicadores são adaptados: o que mais importa para um FII é o "
+        "**P/VP** (preço da cota vs. valor patrimonial) e o **Dividend Yield** — "
+        "não existe P/L nem ROE como em uma ação normal."
+    )
+
+    col_fii1, col_fii2 = st.columns([3, 1])
+    with col_fii1:
+        fiis_selecionados = st.multiselect(
+            "FIIs", options=DEFAULT_FIIS, default=DEFAULT_FIIS[:8], key="fiis_sel",
+        )
+        fiis_custom = st.text_input(
+            "Adicionar outros FIIs (separados por vírgula)",
+            placeholder="Ex: RECT11, VRTA11", key="fiis_custom",
+        )
+    with col_fii2:
+        peso_tecnico_fii = st.slider(
+            "Peso técnico (FIIs)", min_value=0.0, max_value=1.0, value=0.3, step=0.1,
+            key="peso_fii",
+            help="Para FIIs, costuma fazer sentido dar mais peso ao fundamento "
+                 "(P/VP e Dividend Yield) do que ao gráfico.",
+        )
+
+    lista_fiis = list(fiis_selecionados)
+    if fiis_custom.strip():
+        lista_fiis += [normalize_ticker(t) for t in fiis_custom.split(",") if t.strip()]
+
+    if lista_fiis:
+        with st.spinner("Analisando FIIs..."):
+            tabela_fii = analyze_multiple_fiis_cached(tuple(lista_fiis), meses_historico, peso_tecnico_fii)
+
+        styler_fii = tabela_fii.style
+        if hasattr(styler_fii, "map"):
+            styler_fii = styler_fii.map(cor_recomendacao, subset=["Recomendação"])
+        else:
+            styler_fii = styler_fii.applymap(cor_recomendacao, subset=["Recomendação"])
+        st.dataframe(styler_fii, use_container_width=True, hide_index=True)
+    else:
+        st.info("Selecione ao menos um FII acima para ver a análise.")
+
+# ===================== ABA: ETFs =====================
+with tab_etfs:
+    st.subheader("📊 ETFs (fundos de índice)")
+    st.caption(
+        "ETFs replicam um índice inteiro (Ibovespa, S&P 500, small caps...), "
+        "então a recomendação aqui é só **técnica** (tendência, RSI, MACD) — "
+        "não existe 'fundamento de empresa' para um fundo passivo."
+    )
+
+    col_etf1, col_etf2 = st.columns([3, 1])
+    with col_etf1:
+        etfs_selecionados = st.multiselect(
+            "ETFs", options=DEFAULT_ETFS, default=DEFAULT_ETFS[:6], key="etfs_sel",
+        )
+        etfs_custom = st.text_input(
+            "Adicionar outros ETFs (separados por vírgula)",
+            placeholder="Ex: ACWI11, EURP11", key="etfs_custom",
+        )
+
+    lista_etfs = list(etfs_selecionados)
+    if etfs_custom.strip():
+        lista_etfs += [normalize_ticker(t) for t in etfs_custom.split(",") if t.strip()]
+
+    if lista_etfs:
+        with st.spinner("Analisando ETFs..."):
+            tabela_etf = analyze_multiple_etfs_cached(tuple(lista_etfs), meses_historico)
+
+        styler_etf = tabela_etf.style
+        if hasattr(styler_etf, "map"):
+            styler_etf = styler_etf.map(cor_recomendacao, subset=["Recomendação"])
+        else:
+            styler_etf = styler_etf.applymap(cor_recomendacao, subset=["Recomendação"])
+        st.dataframe(styler_etf, use_container_width=True, hide_index=True)
+    else:
+        st.info("Selecione ao menos um ETF acima para ver a análise.")
+
 # ===================== ABA: PERFIL DE INVESTIDOR =====================
 with tab_perfil:
     st.subheader("Descubra seu perfil de investidor")
     st.caption(
         "Responda algumas perguntas rápidas para receber sugestões de "
-        "configuração adequadas ao seu perfil. É uma estimativa simplificada, "
-        
+        "configuração adequadas ao seu perfil."
     )
 
     respostas = {}
@@ -277,7 +376,11 @@ with tab_perfil:
     if enviado:
         resultado_perfil = calcular_perfil(respostas)
         st.session_state["perfil_resultado"] = resultado_perfil
-        st.session_state["peso_tecnico_slider"] = resultado_perfil["peso_tecnico_sugerido"]
+        st.session_state["_perfil_pendente"] = {
+            "peso_tecnico_slider": resultado_perfil["peso_tecnico_sugerido"],
+            "score_min_slider": resultado_perfil["filtro_sugerido"]["score_min"],
+            "dy_min_input": resultado_perfil["filtro_sugerido"]["dy_min"],
+        }
         st.rerun()
 
     if "perfil_resultado" in st.session_state:
@@ -286,10 +389,11 @@ with tab_perfil:
         st.write(rp["descricao"])
         st.caption(f"Pontuação: {rp['pontuacao']} de {rp['pontuacao_maxima']}")
         st.info(
-            f"💡 O 'Peso técnico no score' nas Configurações gerais já foi ajustado "
-            f"para **{rp['peso_tecnico_sugerido']:.1f}**. Na aba Ranking, tente também "
-            f"usar Dividend Yield mínimo de **{rp['filtro_sugerido']['dy_min']}%** e "
-            f"Score mínimo de **{rp['filtro_sugerido']['score_min']}** nos filtros de busca."
+            f"✅ Já apliquei automaticamente na aba **Ranking**: peso técnico "
+            f"ajustado para **{rp['peso_tecnico_sugerido']:.1f}**, Score mínimo de "
+            f"**{rp['filtro_sugerido']['score_min']}** e Dividend Yield mínimo de "
+            f"**{rp['filtro_sugerido']['dy_min']}%** nos filtros de busca. Você pode "
+            f"ajustar qualquer um desses valores manualmente a qualquer momento."
         )
 
 # ===================== ABA: SIMULADOR DE APORTES =====================
@@ -352,8 +456,8 @@ with tab_glossario:
 with tab_sobre:
     st.subheader("Sobre esta ferramenta")
     st.write(
-        "SE FICAR RICA AJUDA EU"
+        "VAI DAR BOM"
     )
     st.warning(
-        "VAI DAR BOM"
+        "SE FICAR RICA ME AJUDA"
     )

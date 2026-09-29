@@ -96,12 +96,71 @@ DEFAULT_TICKERS = [
 ]
 
 
+# Lista de Fundos Imobiliários (FIIs) da B3, por segmento.
+DEFAULT_FIIS = [
+    # Lajes Corporativas e Escritórios
+    "HGRE11.SA", "PVBI11.SA", "BRCR11.SA", "RCRB11.SA", "VINO11.SA", "RBRP11.SA",
+
+    # Galpões Logísticos
+    "HGLG11.SA", "XPLG11.SA", "BRCO11.SA", "VILG11.SA", "GGRC11.SA",
+    "BTLG11.SA", "LVBI11.SA", "GALG11.SA",
+
+    # Shoppings
+    "VISC11.SA", "XPML11.SA", "HGBS11.SA", "MALL11.SA", "HSML11.SA",
+
+    # Papel (Recebíveis Imobiliários / CRI)
+    "MXRF11.SA", "KNCR11.SA", "KNIP11.SA", "IRDM11.SA", "CPTS11.SA",
+    "RBRR11.SA", "VGIP11.SA", "HGCR11.SA",
+
+    # Fundo de Fundos (FOFs)
+    "HFOF11.SA", "RBRF11.SA", "KFOF11.SA", "MGFF11.SA", "BCFF11.SA",
+
+    # Híbridos / Outros
+    "KNRI11.SA", "ALZR11.SA", "TGAR11.SA",
+]
+
+# Lista de ETFs (fundos de índice) negociados na B3.
+DEFAULT_ETFS = [
+    "BOVA11.SA", "SMAL11.SA", "IVVB11.SA", "DIVO11.SA", "BOVV11.SA",
+    "GOVE11.SA", "MATB11.SA", "FIND11.SA", "ISUS11.SA", "ECOO11.SA",
+    "PIBB11.SA", "XBOV11.SA", "BBSD11.SA", "HASH11.SA", "GOLD11.SA",
+    "SPXI11.SA", "NASD11.SA",
+]
+
+
 def normalize_ticker(ticker: str) -> str:
     """Garante que o ticker tenha o sufixo .SA (bolsa brasileira)."""
     ticker = ticker.strip().upper()
     if not ticker.endswith(".SA"):
         ticker += ".SA"
     return ticker
+
+
+# Tradução dos setores retornados pelo Yahoo Finance (em inglês) para português.
+SETOR_TRADUCAO = {
+    "Basic Materials": "Materiais Básicos",
+    "Communication Services": "Comunicações",
+    "Consumer Cyclical": "Consumo Cíclico",
+    "Consumer Defensive": "Consumo Não Cíclico",
+    "Consumer Goods": "Bens de Consumo",
+    "Energy": "Energia",
+    "Financial": "Financeiro",
+    "Financial Services": "Serviços Financeiros",
+    "Healthcare": "Saúde",
+    "Industrials": "Bens Industriais",
+    "Real Estate": "Imobiliário",
+    "REIT": "Fundo Imobiliário",
+    "Technology": "Tecnologia",
+    "Utilities": "Utilidade Pública",
+    "Conglomerates": "Conglomerados",
+}
+
+
+def traduzir_setor(setor: str):
+    """Traduz o nome do setor (inglês, vindo do Yahoo Finance) para português."""
+    if not setor:
+        return setor
+    return SETOR_TRADUCAO.get(setor, setor)
 
 
 def get_price_history(ticker: str, months: int = 12, interval: str = "1d") -> pd.DataFrame:
@@ -138,7 +197,7 @@ def get_fundamentals(ticker: str) -> dict:
     return {
         "ticker": ticker,
         "nome": g("longName") or g("shortName"),
-        "setor": g("sector"),
+        "setor": traduzir_setor(g("sector")),
         "industria": g("industry"),
         "preco_atual": g("currentPrice") or g("regularMarketPrice"),
         "pl": g("trailingPE"),                 # Preço/Lucro
